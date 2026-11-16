@@ -8,6 +8,8 @@ export function createRounds(game, deps) {
 
   let defuseProgress = 0;
   let lastBeep = -1;
+  let roundKills = 0; // player eliminations this round, for streak banners
+  let streakShown = 0;
 
   function setPhase(phase) {
     game.phase = phase;
@@ -33,6 +35,8 @@ export function createRounds(game, deps) {
     game.spike = { planted: false, site: null, x: 0, z: 0, timer: 0, carrier: null };
     game.spikeHolder = null;
     defuseProgress = 0;
+    roundKills = 0;
+    streakShown = 0;
     spike.visible = false;
     resetActors();
     setPhase('buy');
@@ -92,6 +96,12 @@ export function createRounds(game, deps) {
       game.money += ECONOMY.killReward;
       game.kills += 1;
       if (headshot) game.headshots += 1;
+      // Multi-kill streaks: one banner per threshold, once per round.
+      roundKills += 1;
+      if (roundKills >= 2 && roundKills > streakShown) {
+        streakShown = roundKills;
+        if (deps.onStreak) deps.onStreak(roundKills);
+      }
     }
     if (victim.kind === 'player') game.deaths += 1;
   }

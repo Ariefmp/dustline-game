@@ -94,6 +94,15 @@ const rounds = createRounds(game, {
   onPhase,
   onRoundEnd,
   onMatchEnd,
+  onStreak: (n) => {
+    const labels = { 2: 'DOUBLE ELIMINATION', 3: 'TRIPLE ELIMINATION', 4: 'QUAD ELIMINATION' };
+    hud.banner(
+      labels[n] || 'ACE — FULL TEAM ELIMINATED',
+      n >= 5 ? 'Every Vanguard agent is down' : n + ' eliminations this round',
+      'sentinel',
+      2600,
+    );
+  },
   onSpikePlanted,
   onSpikeDefused,
   resetActors,
@@ -115,6 +124,8 @@ let spectateIdx = 0;
 let prevFiring = false;
 let spotTimer = 0;
 let spotted = [];
+let botStepCooldown = 0;
+const botStepPhases = new Map(); // bot -> last stepPhase seen, for footsteps
 
 // ---- callbacks -----------------------------------------------------------
 function onKill(killer, victim, headshot) {
@@ -430,6 +441,27 @@ function step(dt) {
   effects.step(dt);
   combat.syncPlayer();
 
+  // Bot footsteps: a bot's stepPhase advances one half-cycle per footstep
+  // while it walks its route; play the nearest audible one, throttled so
+  // nine bots don't turn into a drumroll.
+  botStepCooldown -= dt;
+  if (game.phase === 'live' && player.state.alive && botStepCooldown <= 0) {
+    let nearestD = 14;
+    let stepped = false;
+    for (const b of bots.list) {
+      if (!b.alive) continue;
+      const prev = botStepPhases.has(b) ? botStepPhases.get(b) : b.stepPhase;
+      botStepPhases.set(b, b.stepPhase);
+      if (Math.floor(b.stepPhase / Math.PI) === Math.floor(prev / Math.PI)) continue;
+      const d = Math.hypot(b.pos.x - player.state.position.x, b.pos.z - player.state.position.z);
+      if (d < nearestD) { nearestD = d; stepped = true; }
+    }
+    if (stepped) {
+      audio.step(nearestD);
+      botStepCooldown = 0.18;
+    }
+  }
+
   // Defuse: hold E near a planted spike.
   if (game.phase === 'live' && game.spike.planted && player.state.alive) {
     const d = Math.hypot(game.spike.x - player.state.position.x, game.spike.z - player.state.position.z);
@@ -566,10 +598,20 @@ function runShot(name) {
     return;
   }
   if (name === 'end') {
-    game.score.sentinel = 5;
+    // Stage a finished match: Sentinel one round from the title, then win it
+    // so the real match-end overlay (title + match stats + Play again) shows.
+    game.score.sentinel = 7;
     game.score.vanguard = 3;
+    // A played-out match to show in the stats, not an empty 0-0 line.
+    game.kills = 14;
+    game.headshots = 5;
+    game.shotsFired = 120;
+    game.shotsHit = 58;
     settle(30);
     rounds.endRound('sentinel', 'Enemy team eliminated');
+    // Let the intermission run out so checkMatchEnd() fires and the overlay
+    // appears; settle() steps the simulation one fixed step at a time.
+    for (let i = 0; i < 400 && game.phase !== 'matchEnd'; i += 1) settle(1);
     player.spawn(8, 4, Math.PI * 0.6);
     settle(5);
     aimAt(new THREE.Vector3(-8, 1.5, -8));

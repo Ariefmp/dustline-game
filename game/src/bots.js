@@ -127,7 +127,7 @@ export function createBots(scene, world, deps) {
       group: model.group, parts: model, bar, hitMeshes,
       state: 'hold', path: [], pathI: 0,
       targetNode: 0, holdNode: 0, holdYaw: 0, holdSite: 'mid',
-      route: 'A', hasSpike: false,
+      route: 'A', routeNodes: null, routeI: 0, hasSpike: false,
       weapon: 'rifle', mag: 30, reserve: 90, cooldown: 0, reloading: false, reloadTimer: 0,
       burstLeft: 0, burstPause: 0, reaction: 0, visibleEnemy: null,
       strafeDir: 1, strafeTimer: 0, crouch: false,
@@ -154,17 +154,70 @@ export function createBots(scene, world, deps) {
     bot.targetNode = toNode;
   }
 
+  // Routes are 'A' | 'B' | 'midA' | 'midB'; mid routes flank through the
+  // middle lane and end at the same site as the short route of that letter.
+  function siteOf(route) {
+    return route === 'B' || route === 'midB' ? 'B' : 'A';
+  }
+
+  function siteNode(route) {
+    return siteOf(route) === 'A' ? 3 : 6;
+  }
+
+  // Walk the bot's assigned route node list, with the same stuck handling
+  // as followPath: no progress in 1.5 s skips a node.
+  function followRouteNodes(bot, dt, speed) {
+    if (!bot.routeNodes || bot.routeI >= bot.routeNodes.length) return true;
+    const node = nodes[bot.routeNodes[bot.routeI]];
+    const arrived = moveToward(bot, node[0], node[1], dt, speed);
+    if (arrived) bot.routeI += 1;
+    const moved = dist2D2(bot.pos.x, bot.pos.z, bot.lastX, bot.lastZ);
+    if (moved > 0.04) {
+      bot.lastX = bot.pos.x;
+      bot.lastZ = bot.pos.z;
+      bot.stuckTimer = 0;
+    } else {
+      bot.stuckTimer += dt;
+      if (bot.stuckTimer > 1.5) {
+        bot.routeI += 1;
+        bot.stuckTimer = 0;
+      }
+    }
+    return bot.routeI >= bot.routeNodes.length;
+  }
+
+  // Bots buy better as the match goes on: rifles and the DMR weigh more in
+  // later rounds instead of a flat random draw every round.
+  function pickGun() {
+    const pool = game.round >= 6
+      ? ['rifle', 'rifle', 'rifle', 'rifle', 'smg', 'sniper', 'shotgun']
+      : game.round >= 3
+        ? ['rifle', 'rifle', 'rifle', 'smg', 'smg', 'shotgun', 'sniper']
+        : BOT_GUNS;
+    return pick(random, pool);
+  }
+
   function assignRound() {
-    // Vanguard: 3 push A, 2 push B (carrier goes A most rounds, B sometimes).
+    // Vanguard: the carrier pushes the short lane to one site, one bot flanks
+    // through mid to the same site, the rest push the two lanes. The mid
+    // routes were in the table but never used; they make the push harder for
+    // the defenders to read.
     const carrierSite = random() < 0.65 ? 'A' : 'B';
+    const flankRoute = carrierSite === 'A' ? 'midA' : 'midB';
     const vanguard = list.filter((b) => b.team === 'vanguard');
     vanguard.forEach((bot, i) => {
-      bot.route = i < 3 ? carrierSite : carrierSite === 'A' ? 'B' : 'A';
+      if (i === 0) bot.route = carrierSite; // carrier, short lane
+      else if (i === 1) bot.route = flankRoute; // flanker, mid lane
+      else if (i === 2) bot.route = carrierSite;
+      else bot.route = carrierSite === 'A' ? 'B' : 'A';
+      bot.routeNodes = VANGUARD_ROUTES[bot.route];
+      bot.routeI = 0;
       bot.hasSpike = i === 0;
-      bot.weapon = pick(random, BOT_GUNS);
+      bot.weapon = pickGun();
+      bot.skill = Math.min(0.95, bot.skill + 0.02); // bots sharpen round by round
       bot.mag = WEAPONS[bot.weapon].mag;
       bot.reserve = WEAPONS[bot.weapon].reserve;
-      bot.armor = random() < 0.5 ? 50 : 0;
+      bot.armor = random() < Math.min(0.8, 0.4 + game.round * 0.04) ? 50 : 0;
       bot.hasHelmet = bot.armor > 0 && random() < 0.5;
     });
     game.spikeHolder = vanguard[0];
@@ -176,10 +229,11 @@ export function createBots(scene, world, deps) {
       bot.holdNode = spot.node;
       bot.holdYaw = spot.yaw;
       bot.holdSite = spot.site;
-      bot.weapon = pick(random, BOT_GUNS);
+      bot.weapon = pickGun();
+      bot.skill = Math.min(0.95, bot.skill + 0.02); // bots sharpen round by round
       bot.mag = WEAPONS[bot.weapon].mag;
       bot.reserve = WEAPONS[bot.weapon].reserve;
-      bot.armor = random() < 0.6 ? 50 : 0;
+      bot.armor = random() < Math.min(0.85, 0.5 + game.round * 0.04) ? 50 : 0;
       bot.hasHelmet = bot.armor > 0 && random() < 0.5;
     });
   }
@@ -211,7 +265,7 @@ export function createBots(scene, world, deps) {
     for (const bot of list) {
       if (bot.team === 'vanguard') {
         bot.state = 'advance';
-        setPath(bot, bot.route === 'A' ? 3 : 6);
+        bot.routeI = 0; // walk the assigned route node list from the spawn
       } else {
         bot.state = 'advance';
         setPath(bot, bot.holdNode);
@@ -439,15 +493,14 @@ export function createBots(scene, world, deps) {
     const spike = game.spike;
     if (spike.planted) {
       // Hold the site after the plant.
-      if (bot.state !== 'hold') { bot.state = 'hold'; setPath(bot, bot.route === 'A' ? 3 : 6); }
+      if (bot.state !== 'hold') { bot.state = 'hold'; setPath(bot, siteNode(bot.route)); }
       if (followPath(bot, dt, BOT.walkSpeed)) {
         bot.yaw += Math.sin(game.time * 0.4 + bot.index) * dt * 0.5;
       }
       return;
     }
     if (bot.hasSpike) {
-      const siteNode = bot.route === 'A' ? 3 : 6;
-      const site = world.sites[bot.route];
+      const site = world.sites[siteOf(bot.route)];
       const d = Math.hypot(site.plant.x - bot.pos.x, site.plant.z - bot.pos.z);
       if (d < 1.4) {
         bot.state = 'plant';
@@ -456,12 +509,12 @@ export function createBots(scene, world, deps) {
         if (bot.plantTimer >= ROUND.plantTime) {
           bot.plantTimer = 0;
           bot.state = 'hold';
-          game.plantSpike(bot.route, bot);
+          game.plantSpike(siteOf(bot.route), bot);
         }
         return;
       }
       bot.state = 'advance';
-      followPath(bot, dt, BOT.runSpeed);
+      followRouteNodes(bot, dt, BOT.runSpeed);
       return;
     }
     // Not the carrier: if the spike is on the ground, go pick it up.
@@ -471,7 +524,8 @@ export function createBots(scene, world, deps) {
         bot.hasSpike = true;
         spike.carrier = bot;
         bot.route = spike.site || bot.route;
-        setPath(bot, bot.route === 'A' ? 3 : 6);
+        bot.routeNodes = VANGUARD_ROUTES[bot.route];
+        bot.routeI = 0;
         return;
       }
       if (bot.state !== 'fetch') {
@@ -482,11 +536,8 @@ export function createBots(scene, world, deps) {
       return;
     }
     // Escort the carrier's route.
-    if (bot.state !== 'advance') {
-      bot.state = 'advance';
-      setPath(bot, bot.route === 'A' ? 3 : 6);
-    }
-    followPath(bot, dt, BOT.runSpeed);
+    if (bot.state !== 'advance') bot.state = 'advance';
+    followRouteNodes(bot, dt, BOT.runSpeed);
   }
 
   function stepSentinel(bot, dt) {
@@ -578,7 +629,7 @@ export function createBots(scene, world, deps) {
         game.spike.carrier = null;
         game.spike.x = bot.pos.x;
         game.spike.z = bot.pos.z;
-        game.spike.site = bot.route;
+        game.spike.site = siteOf(bot.route);
       }
       onDeath(bot, attacker);
       return true;
