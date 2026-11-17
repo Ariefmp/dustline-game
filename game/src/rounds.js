@@ -27,6 +27,9 @@ export function createRounds(game, deps) {
     game.headshots = 0;
     game.shotsFired = 0;
     game.shotsHit = 0;
+    game.damageDealt = 0;
+    game.bestStreak = 0;
+    game.board.clear();
     startRound();
   }
 
@@ -37,6 +40,7 @@ export function createRounds(game, deps) {
     defuseProgress = 0;
     roundKills = 0;
     streakShown = 0;
+    game.roundStreak = 0;
     spike.visible = false;
     resetActors();
     setPhase('buy');
@@ -98,6 +102,12 @@ export function createRounds(game, deps) {
       if (headshot) game.headshots += 1;
       // Multi-kill streaks: one banner per threshold, once per round.
       roundKills += 1;
+      game.roundStreak = roundKills;
+      game.bestStreak = Math.max(game.bestStreak, roundKills);
+      // A hot round pays: streak cash on top of the per-kill reward.
+      if (ECONOMY.streakBonus[roundKills]) {
+        game.money += ECONOMY.streakBonus[roundKills];
+      }
       if (roundKills >= 2 && roundKills > streakShown) {
         streakShown = roundKills;
         if (deps.onStreak) deps.onStreak(roundKills);

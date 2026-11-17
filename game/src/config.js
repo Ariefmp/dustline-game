@@ -78,6 +78,9 @@ export const ECONOMY = {
   lossReward: 1400,
   lossBonusStep: 500,
   lossBonusMax: 2900,
+  // Killstreak cash: a hot round pays. 3 eliminations in one round earns
+  // $500, a full team wipe (5) earns $1,000 — on top of the $300 per kill.
+  streakBonus: { 3: 500, 5: 1000 },
 };
 
 export const ROUND = {

@@ -98,6 +98,21 @@
   #damage-dir.on { opacity: 1; }
   #damage-dir::before { content: ''; position: absolute; top: 0; left: 50%; transform: translateX(-50%); width: 60px; height: 14px; border-radius: 7px; background: rgba(217,79,61,.85); box-shadow: 0 0 12px rgba(217,79,61,.8); }
 
+  /* Streak badge, under the crosshair. */
+  #streak { position: fixed; top: 58%; left: 50%; transform: translateX(-50%); font-family: var(--font-readout); font-size: 15px; font-weight: 700; letter-spacing: .14em; color: var(--accent); text-shadow: 0 1px 4px rgba(0,0,0,.8); }
+
+  /* Scoreboard (hold Tab): both teams, kills / deaths, alive state. */
+  #scoreboard { position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); width: min(430px, 92vw); background: var(--surface); border: 1px solid var(--hairline); border-radius: 6px; padding: 16px 18px; }
+  #scoreboard h3 { margin: 0 0 10px; font-size: 13px; letter-spacing: .16em; color: var(--muted); }
+  .score-team { font-size: 13px; font-weight: 700; letter-spacing: .1em; padding: 8px 0 4px; }
+  .score-team.sentinel { color: var(--teal); }
+  .score-team.vanguard { color: var(--rust); }
+  .score-row { display: flex; justify-content: space-between; padding: 4px 0; font-size: 14px; border-bottom: 1px solid rgba(44,50,58,.6); }
+  .score-row.dead { opacity: .45; }
+  .score-name { flex: 1; }
+  .score-kd { font-family: var(--font-readout); width: 64px; text-align: center; }
+  .score-state { font-size: 11px; letter-spacing: .1em; color: var(--muted); width: 52px; text-align: right; }
+
   /* Round banner. */
   #banner { position: fixed; top: 24%; left: 0; right: 0; text-align: center; opacity: 0; transition: opacity .25s; pointer-events: none; }
   #banner.show { opacity: 1; }
@@ -132,6 +147,9 @@
   .panel p { margin: 0 0 22px; max-width: 46ch; font-size: 15px; line-height: 1.55; color: var(--muted); }
   #play { font: inherit; font-weight: 600; padding: 12px 20px; border: 1px solid var(--accent); border-radius: 6px; background: var(--accent); color: #14161a; cursor: pointer; }
   #play:hover { background: var(--ink); border-color: var(--ink); }
+  #restart { font: inherit; font-weight: 600; padding: 12px 20px; margin-left: 10px; border: 1px solid var(--hairline); border-radius: 6px; background: transparent; color: var(--muted); cursor: pointer; }
+  #restart:hover { border-color: var(--accent); color: var(--ink); }
+  #match-stars { font-size: 34px; letter-spacing: .12em; color: var(--accent); margin: 2px 0 0; }
   #match-stats { margin: 18px 0 22px; border-top: 1px solid var(--hairline); }
   .stat-row { display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid var(--hairline); font-size: 14px; }
   .stat-row span { color: var(--muted); }
@@ -176,6 +194,12 @@
   <div id="damage-dir"></div>
 
   <div id="banner"><div id="banner-title"></div><div id="banner-sub"></div></div>
+  <div id="streak" class="hidden"></div>
+
+  <div id="scoreboard" class="hidden">
+    <h3>SCOREBOARD — HOLD TAB</h3>
+    <div id="score-rows"></div>
+  </div>
 
   <div id="buy-menu" class="hidden">
     <div class="buy-panel">
@@ -191,8 +215,10 @@
   <section class="panel" role="dialog" aria-modal="true" aria-labelledby="overlay-title">
     <h1 id="overlay-title">DUSTLINE</h1>
     <p id="overlay-copy">A tactical 5v5 in a dusk container yard. Defend the sites, stop the spike — or watch your team fall. First to 8 rounds takes the match.</p>
+    <div id="match-stars" class="hidden"></div>
     <div id="match-stats" class="hidden"></div>
     <button id="play" type="button">Click to play</button>
+    <button id="restart" type="button" class="hidden">Restart match</button>
     <ul class="keys">
       <li><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> Move</li>
       <li><kbd>Mouse</kbd> Look · <kbd>Click</kbd> Fire</li>
@@ -201,6 +227,7 @@
       <li><kbd>R</kbd> Reload · <kbd>B</kbd> Buy menu</li>
       <li><kbd>1</kbd><kbd>2</kbd> Weapons · <kbd>4</kbd><kbd>5</kbd> Grenades</li>
       <li><kbd>E</kbd> Defuse the spike</li>
+      <li><kbd>Tab</kbd> Scoreboard</li>
       <li><kbd>Space</kbd> Jump</li>
     </ul>
   </section>

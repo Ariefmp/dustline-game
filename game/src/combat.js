@@ -214,7 +214,7 @@ export function createCombat(scene, world, effects, audio, deps) {
     return true;
   }
 
-  function blastDamage(x, y, z, radius, maxDmg, throughWalls) {
+  function blastDamage(x, y, z, radius, maxDmg, throughWalls, owner) {
     for (const agent of getAgents()) {
       if (!agent.alive) continue;
       agentChest(agent, _chest);
@@ -231,7 +231,7 @@ export function createCombat(scene, world, effects, audio, deps) {
           onKill(null, agent, false);
         }
       } else {
-        deps.damageBot(agent, dmg, 'body', null);
+        deps.damageBot(agent, dmg, 'body', owner || null);
       }
     }
   }
@@ -273,7 +273,7 @@ export function createCombat(scene, world, effects, audio, deps) {
         if (g.kind === 'frag') {
           effects.explosion(g.pos);
           audio.explosion(Math.hypot(g.pos.x - player.state.position.x, g.pos.z - player.state.position.z));
-          blastDamage(g.pos.x, g.pos.y, g.pos.z, 7.5, 120, false);
+          blastDamage(g.pos.x, g.pos.y, g.pos.z, 7.5, 120, false, g.owner);
           game.shake(0.5);
         } else {
           effects.smoke(g.pos);

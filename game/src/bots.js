@@ -617,6 +617,10 @@ export function createBots(scene, world, deps) {
       bot.armor -= absorbed;
       dmg -= absorbed;
     }
+    // The match stats count the damage the player actually dealt to health.
+    if (attacker && attacker.kind === 'player') {
+      game.damageDealt += Math.max(0, Math.round(Math.min(dmg, bot.health)));
+    }
     bot.health -= dmg;
     updateBar(bot);
     if (bot.health <= 0) {

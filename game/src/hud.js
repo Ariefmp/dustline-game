@@ -38,9 +38,14 @@ export function createHud(world, game) {
     overlayTitle: $('overlay-title'),
     overlayCopy: $('overlay-copy'),
     playBtn: $('play'),
+    restartBtn: $('restart'),
     matchStats: $('match-stats'),
+    matchStars: $('match-stars'),
     hint: $('hint'),
     crosshairDot: $('crosshair-dot'),
+    streak: $('streak'),
+    scoreboard: $('scoreboard'),
+    scoreRows: $('score-rows'),
   };
   const mm = el.minimap.getContext('2d');
   const MM_W = 176;
@@ -49,6 +54,7 @@ export function createHud(world, game) {
   el.minimap.height = MM_H;
 
   let playCallback = null;
+  let restartCallback = null;
   let buyCallback = null;
   let buyCloseCallback = null;
   let hitTimer = null;
@@ -57,6 +63,9 @@ export function createHud(world, game) {
 
   el.playBtn.addEventListener('click', () => {
     if (playCallback) playCallback();
+  });
+  el.restartBtn.addEventListener('click', () => {
+    if (restartCallback) restartCallback();
   });
   el.buyClose.addEventListener('click', () => {
     if (buyCloseCallback) buyCloseCallback();
@@ -198,31 +207,80 @@ export function createHud(world, game) {
     el.hint.classList.toggle('hidden', !text);
   }
 
+  // ---- streak badge + scoreboard -----------------------------------------
+  // The streak badge sits under the timer while the player is on a
+  // multi-elimination run this round; the scoreboard lists both teams.
+  function setStreak(n) {
+    if (n >= 2) {
+      el.streak.textContent = 'STREAK ×' + n;
+      el.streak.classList.remove('hidden');
+    } else {
+      el.streak.classList.add('hidden');
+    }
+  }
+
+  function drawScoreboard(rows) {
+    el.scoreRows.innerHTML = '';
+    for (const team of ['sentinel', 'vanguard']) {
+      const head = document.createElement('div');
+      head.className = 'score-team ' + team;
+      head.textContent = team === 'sentinel' ? 'SENTINEL — your team' : 'VANGUARD';
+      el.scoreRows.appendChild(head);
+      for (const row of rows.filter((r) => r.team === team)) {
+        const line = document.createElement('div');
+        line.className = 'score-row' + (row.alive ? '' : ' dead');
+        line.innerHTML = '<span class="score-name"></span><span class="score-kd"></span><span class="score-state"></span>';
+        line.querySelector('.score-name').textContent = row.name;
+        line.querySelector('.score-kd').textContent = row.kills + ' / ' + row.deaths;
+        line.querySelector('.score-state').textContent = row.alive ? 'ALIVE' : 'DOWN';
+        el.scoreRows.appendChild(line);
+      }
+    }
+    el.scoreboard.classList.remove('hidden');
+  }
+
+  function hideScoreboard() {
+    el.scoreboard.classList.add('hidden');
+  }
+
   // ---- overlays ----------------------------------------------------------
   function showOverlay(kind, data = {}) {
     el.overlay.classList.remove('hidden');
     el.matchStats.classList.add('hidden');
+    el.matchStars.classList.add('hidden');
+    el.restartBtn.classList.add('hidden');
     if (kind === 'start') {
       el.overlayTitle.textContent = 'DUSTLINE';
       el.overlayCopy.textContent = 'A tactical 5v5 in a dusk container yard. Defend the sites, stop the spike — or watch your team fall. First to 8 rounds takes the match.';
       el.playBtn.textContent = 'Click to play';
     } else if (kind === 'paused') {
       el.overlayTitle.textContent = 'Paused';
-      el.overlayCopy.textContent = 'The round is waiting. Click to get back in.';
+      el.overlayCopy.textContent = 'The round is waiting. Click to get back in, or start a fresh match.';
       el.playBtn.textContent = 'Resume';
+      el.restartBtn.classList.remove('hidden');
     } else if (kind === 'matchEnd') {
       el.overlayTitle.textContent = data.winner === 'sentinel' ? 'SENTINEL WINS' : 'VANGUARD WINS';
       el.overlayCopy.textContent = data.winner === 'sentinel'
         ? 'The yard holds. Both sites stood, and the spike never went off.'
         : 'The spike did its work. The yard belongs to Vanguard now.';
       el.playBtn.textContent = 'Play again';
+      // Stars: a win with sharp shooting and a strong K/D earns three.
+      const acc = game.shotsFired ? game.shotsHit / game.shotsFired : 0;
+      const kd = game.kills / Math.max(1, game.deaths);
+      const won = data.winner === 'sentinel';
+      const stars = won && acc >= 0.4 && kd >= 1.5 ? 3 : won ? 2 : kd >= 1 ? 1 : 0;
+      el.matchStars.textContent = '★★★'.slice(0, stars) + '☆☆☆'.slice(0, 3 - stars);
+      el.matchStars.classList.remove('hidden');
       el.matchStats.classList.remove('hidden');
       el.matchStats.innerHTML = '';
       const stats = [
         ['Rounds', game.score.sentinel + ' — ' + game.score.vanguard],
         ['Eliminations', String(game.kills)],
+        ['Deaths', String(game.deaths)],
         ['Headshots', String(game.headshots)],
-        ['Accuracy', game.shotsFired ? Math.round((game.shotsHit / game.shotsFired) * 100) + '%' : '—'],
+        ['Accuracy', game.shotsFired ? Math.round(acc * 100) + '%' : '—'],
+        ['Damage dealt', String(game.damageDealt)],
+        ['Best streak', game.bestStreak >= 2 ? '×' + game.bestStreak : '—'],
       ];
       for (const [label, value] of stats) {
         const row = document.createElement('div');
@@ -304,8 +362,9 @@ export function createHud(world, game) {
     setHealth, setAmmo, setMoney, setTimer, setScore, setCrosshairGap,
     hitMarker, damageFlash, killFeed, banner, spikeStatus, hint,
     showOverlay, hideOverlay, updateBuyMenu,
-    drawMinimap,
+    drawMinimap, setStreak, drawScoreboard, hideScoreboard,
     onPlay(cb) { playCallback = cb; },
+    onRestart(cb) { restartCallback = cb; },
     onBuy(cb) { buyCallback = cb; },
     onBuyClose(cb) { buyCloseCallback = cb; },
     showBuyMenu(show) { el.buyMenu.classList.toggle('hidden', !show); },

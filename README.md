@@ -33,6 +33,8 @@ Click to play (pointer lock). No build step, no network requests, no account.
 | B | Buy menu (buy phase only) |
 | 1 / 2 | Primary / sidearm |
 | 4 / 5 | Select frag / smoke grenade, click to throw |
+| Tab | Scoreboard (hold) — both teams, kills / deaths |
+| P / Esc | Pause — resume, or restart the match |
 | E | Defuse the spike (hold, near the spike) |
 | Right click | Scope (Longbow DMR) |
 | Space | Jump |
@@ -46,11 +48,15 @@ Click to play (pointer lock). No build step, no network requests, no account.
   sound. Nothing is copied from any existing game.
 - **Rounds** — 15-second buy phase, 100-second rounds, first to 8 takes the
   match (max 15). The spike detonates 35 seconds after the plant. A match-end
-  screen shows the result, the score and your stats, with a Play again button.
+  screen shows a star rating (1–3 stars for a sharp win), the score and your
+  stats — eliminations, deaths, headshots, accuracy, damage dealt, best
+  streak — with a Play again button. The pause menu offers Resume or a fresh
+  match.
 - **Economy** — start at $800; $300 per elimination, $3,250 for a round win,
-  $1,400+ for a loss with a growing loss bonus. Five weapons (P9 Sidearm,
-  Kestrel-9 SMG, VK-47 Carbine, Breacher-12 shotgun, Longbow DMR), Kevlar,
-  helmet, defuse kit, frag and smoke grenades.
+  $1,400+ for a loss with a growing loss bonus. A hot round pays extra:
+  $500 for a 3-elimination streak, $1,000 for a full team wipe (5). Five
+  weapons (P9 Sidearm, Kestrel-9 SMG, VK-47 Carbine, Breacher-12 shotgun,
+  Longbow DMR), Kevlar, helmet, defuse kit, frag and smoke grenades.
 - **Gunplay** — hitscan with headshot multipliers, damage falloff, recoil and
   spread that punish firing on the move; stopping, crouching and slow-walking
   pay. Armour absorbs half of incoming damage; helmets blunt headshots.
@@ -61,7 +67,8 @@ Click to play (pointer lock). No build step, no network requests, no account.
 - **HUD** — health and armour bars, ammo and money, round timer and score,
   kill feed, a live minimap (teammates always, enemies only while spotted),
   spike timer and defuse progress, dynamic crosshair, hitmarkers and damage
-  direction.
+  direction, a streak badge while you are on a multi-elimination run, and a
+  hold-Tab scoreboard for both teams.
 
 ## Structure
 

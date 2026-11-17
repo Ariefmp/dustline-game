@@ -4,7 +4,7 @@
 // ?shot=start|play|buy|end with &seed=N stages a deterministic frame for a
 // capture, renders it twice, then freezes it and sets window.__shotReady.
 import * as THREE from 'three';
-import { PALETTE, ROUND } from './config.js';
+import { PALETTE, ROUND, ECONOMY } from './config.js';
 import { mulberry32, clamp, angleDelta } from './util.js';
 import { createWorld } from './world.js';
 import { createInput } from './input.js';
@@ -32,6 +32,8 @@ const game = {
   money: 800,
   lossStreak: 0,
   kills: 0, deaths: 0, headshots: 0, shotsFired: 0, shotsHit: 0,
+  damageDealt: 0, bestStreak: 0, roundStreak: 0,
+  board: new Map(), // agent -> { kills, deaths } for the Tab scoreboard
   spike: { planted: false, site: null, x: 0, z: 0, timer: 0, carrier: null },
   spikeHolder: null,
   hasDefuseKit: false,
@@ -96,9 +98,11 @@ const rounds = createRounds(game, {
   onMatchEnd,
   onStreak: (n) => {
     const labels = { 2: 'DOUBLE ELIMINATION', 3: 'TRIPLE ELIMINATION', 4: 'QUAD ELIMINATION' };
+    const bonus = ECONOMY.streakBonus[n];
     hud.banner(
       labels[n] || 'ACE — FULL TEAM ELIMINATED',
-      n >= 5 ? 'Every Vanguard agent is down' : n + ' eliminations this round',
+      (n >= 5 ? 'Every Vanguard agent is down' : n + ' eliminations this round')
+        + (bonus ? ' · +$' + bonus.toLocaleString('en-US') + ' streak bonus' : ''),
       'sentinel',
       2600,
     );
@@ -125,10 +129,34 @@ let prevFiring = false;
 let spotTimer = 0;
 let spotted = [];
 let botStepCooldown = 0;
+let scoreVisible = false;
+let boardDirty = true;
 const botStepPhases = new Map(); // bot -> last stepPhase seen, for footsteps
+
+// ---- scoreboard ----------------------------------------------------------
+function boardEntry(agent) {
+  let e = game.board.get(agent);
+  if (!e) {
+    e = { kills: 0, deaths: 0 };
+    game.board.set(agent, e);
+  }
+  return e;
+}
+
+function scoreboardRows() {
+  const rows = [];
+  for (const a of [combat.playerAgent, ...bots.list]) {
+    const e = game.board.get(a) || { kills: 0, deaths: 0 };
+    rows.push({ name: a.name, team: a.team, kills: e.kills, deaths: e.deaths, alive: a.alive });
+  }
+  return rows;
+}
 
 // ---- callbacks -----------------------------------------------------------
 function onKill(killer, victim, headshot) {
+  if (killer) boardEntry(killer).kills += 1;
+  if (victim) boardEntry(victim).deaths += 1;
+  boardDirty = true;
   hud.killFeed(killer ? killer.name : '—', victim.name, headshot, killer ? killer.team : null, victim.team);
   rounds.onKill(killer, victim, headshot);
   if (killer && killer.kind === 'player') {
@@ -241,6 +269,13 @@ hud.onBuyClose(() => {
 hud.onPlay(() => {
   if (shot) return;
   audio.unlock();
+  input.requestLock();
+});
+
+hud.onRestart(() => {
+  if (shot) return;
+  rounds.startMatch();
+  hud.hideOverlay();
   input.requestLock();
 });
 
@@ -370,6 +405,11 @@ function handlePressed() {
   if (input.takePressed('MouseScope')) weapons.toggleScope();
   if (input.takePressed('MouseScopeOff') && weapons.state.scoped) weapons.toggleScope();
   if (input.takePressed('KeyM')) audio.toggleMute();
+  // P pauses: freeing the pointer shows the pause overlay (Resume / Restart).
+  if (input.takePressed('KeyP') && document.pointerLockElement
+    && (game.phase === 'live' || game.phase === 'buy' || game.phase === 'roundEnd')) {
+    document.exitPointerLock();
+  }
   if (input.takePressed('Digit1')) {
     if (hud.isBuyOpen()) buyByIndex(0);
     else selectPrimary();
@@ -518,6 +558,23 @@ function updateHud(dt) {
   if (game.phase === 'live' && !s.alive) {
     hud.hint('You were eliminated — click to switch spectate target');
   }
+
+  // Streak badge while the player is on a multi-elimination run this round.
+  hud.setStreak(game.phase === 'live' ? game.roundStreak : 0);
+
+  // Scoreboard while Tab is held (live, buy or between rounds).
+  const wantScore = input.state.keys.has('Tab')
+    && (game.phase === 'live' || game.phase === 'buy' || game.phase === 'roundEnd');
+  if (wantScore) {
+    if (!scoreVisible || boardDirty) {
+      hud.drawScoreboard(scoreboardRows());
+      scoreVisible = true;
+      boardDirty = false;
+    }
+  } else if (scoreVisible) {
+    hud.hideScoreboard();
+    scoreVisible = false;
+  }
 }
 
 // ---- frame loop ----------------------------------------------------------
@@ -607,6 +664,9 @@ function runShot(name) {
     game.headshots = 5;
     game.shotsFired = 120;
     game.shotsHit = 58;
+    game.deaths = 6;
+    game.damageDealt = 1240;
+    game.bestStreak = 4;
     settle(30);
     rounds.endRound('sentinel', 'Enemy team eliminated');
     // Let the intermission run out so checkMatchEnd() fires and the overlay
@@ -622,6 +682,7 @@ function runShot(name) {
   game.phase = 'live';
   game.roundTimer = 88;
   hud.showBuyMenu(false);
+  hud.hint(''); // the buy-phase hint from startMatch() does not apply here
   settle(150);
   let target = null;
   let bestD = Infinity;
